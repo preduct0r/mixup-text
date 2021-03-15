@@ -1,4 +1,4 @@
-from torchtext import data
+from torchtext import data,legacy
 # from torchtext.vocab import Vectors
 import spacy
 import pandas as pd
@@ -46,28 +46,28 @@ class WordDataset(object):
             val_file (String): absolute path to validation file
         """
 
-        nlp = spacy.load('en')
+        nlp = spacy.load("en_core_web_sm")
         tokenizer = lambda sent: [x.text for x in nlp.tokenizer(sent) if x.text != " "]
 
         # Creating Field for data
-        text = data.Field(sequential=True, tokenize=tokenizer, lower=True, fix_length=self.sequence_len)
-        label = data.Field(sequential=False, use_vocab=False)
+        text = legacy.data.Field(sequential=True, tokenize=tokenizer, lower=True, fix_length=self.sequence_len)
+        label = legacy.data.Field(sequential=False, use_vocab=False)
         datafields = [("text", text), ("label", label)]
 
         # Load data from pd.DataFrame into torchtext.data.Dataset
         train_df = self.get_pandas_df(train_file, text_col, label_col)
-        train_examples = [data.Example.fromlist(i, datafields) for i in train_df.values.tolist()]
-        train_data = data.Dataset(train_examples, datafields)
+        train_examples = [legacy.data.Example.fromlist(i, datafields) for i in train_df.values.tolist()]
+        train_data = legacy.data.Dataset(train_examples, datafields)
 
         test_df = self.get_pandas_df(test_file, text_col, label_col)
-        test_examples = [data.Example.fromlist(i, datafields) for i in test_df.values.tolist()]
-        test_data = data.Dataset(test_examples, datafields)
+        test_examples = [legacy.data.Example.fromlist(i, datafields) for i in test_df.values.tolist()]
+        test_data = legacy.data.Dataset(test_examples, datafields)
 
         # If validation file exists, load it. Otherwise get validation data from training data
         if val_file:
             val_df = self.get_pandas_df(val_file, text_col, label_col)
-            val_examples = [data.Example.fromlist(i, datafields) for i in val_df.values.tolist()]
-            val_data = data.Dataset(val_examples, datafields)
+            val_examples = [legacy.data.Example.fromlist(i, datafields) for i in val_df.values.tolist()]
+            val_data = legacy.data.Dataset(val_examples, datafields)
         else:
             train_data, val_data = train_data.split(split_ratio=0.9)
 
@@ -82,14 +82,14 @@ class WordDataset(object):
         self.word_embeddings = text.vocab.vectors
         self.vocab = text.vocab
 
-        self.train_iterator = data.BucketIterator(
+        self.train_iterator = legacy.data.BucketIterator(
             train_data,
             batch_size=self.batch_size,
             sort_key=lambda x: len(x.text),
             repeat=False,
             shuffle=True)
 
-        self.val_iterator, self.test_iterator = data.BucketIterator.splits(
+        self.val_iterator, self.test_iterator = legacy.data.BucketIterator.splits(
             (val_data, test_data),
             batch_size=self.batch_size,
             sort_key=lambda x: len(x.text),
