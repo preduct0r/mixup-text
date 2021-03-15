@@ -93,3 +93,29 @@ class TextCNN(nn.Module):
         y = lam * y1 + (1.0-lam) * y2
         y = self.fc(y)
         return y
+
+    def _init_embeddings_and_vocab(self, embeddings_file: str, vocab_file: str,
+                                   embeddings_dim: int) -> Tuple[np.array, dict]:
+        if embeddings_file is None or vocab_file is None:
+            logger.info("Embeddings files are not specified. Perform random initialization of embeddings...")
+            embeddings = np.random.uniform(low=-0.2, high=0.2, size=(2, embeddings_dim))
+            vocab = {'<PAD>': 0, '<UNK>': 1}
+        else:
+            embeddings = self._load_embeddings(embeddings_file)
+            vocab = self._load_word2vec_vocabulary(vocab_file)
+        return embeddings, vocab
+
+
+    def _load_embeddings(self, embeddings_file: str) -> np.array:
+        try:
+            embeddings = np.load(embeddings_file).T
+        except FileNotFoundError as e:
+            message = "Embeddings file doesn't exist: {}".format(e)
+            logger.error(message)
+            raise FileNotFoundError(message)
+        except ValueError as e:
+            message = "Embeddings file couldn't load: {}".format(e)
+            logger.error(message)
+            raise ValueError(message)
+        return embeddings
+
