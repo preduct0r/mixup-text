@@ -11,10 +11,10 @@ class TaskConfig:
 def get_task_config(task_name):
     config = TaskConfig()
     if task_name == 'trec':
-        config.num_class = 6
-        config.train_file = 'data/trec/train.csv'
+        config.num_class = 20
+        config.train_file = '/home/den/datasets/0068_NLU_CLF_Beeline/splits/by_classes_count/20cl/new_train_180pm100_20cl.json'
         config.val_file = None
-        config.test_file = 'data/trec/test.csv'
+        config.test_file = '/home/den/datasets/0068_NLU_CLF_Beeline/splits/by_classes_count/20cl/new_test_20_20cl.json'
         config.sequence_len = 30
         config.eval_interval = 20
         config.patience = 50

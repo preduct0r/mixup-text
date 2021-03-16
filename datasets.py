@@ -6,6 +6,7 @@ import pickle
 from torch.utils.data import Dataset
 import torch
 from transformers import BertTokenizer
+import json
 
 
 class WordDataset(object):
@@ -24,13 +25,26 @@ class WordDataset(object):
         Load the data into Pandas.DataFrame object
         This will be used to convert data to torchtext object
         """
-        df = pd.read_csv(filename, sep='\t')
-        texts = []
-        labels = []
-        for index, row in df.iterrows():
-            texts.append(row[text_col])
-            labels.append(int(row[label_col]))
-        df = pd.DataFrame({"text": texts, "label": labels})
+        with open(filename, encoding='utf-8') as json_data:
+            data = json.load(json_data)
+            json_data.close()
+
+        xs, ys = [], []
+        y_name, x_name = data[0].keys()
+        for d in data:
+            for i in d.get(x_name):
+                ys.append(d.get(y_name))
+                xs.append(i)
+
+
+
+        # df = pd.read_csv(filename, sep='\t')
+        # texts = []
+        # labels = []
+        # for index, row in df.iterrows():
+        #     texts.append(row[text_col])
+        #     labels.append(int(row[label_col]))
+        df = pd.DataFrame({"text": xs, "label": ys})
         return df
 
     def load_data(self, train_file, test_file, val_file=None, w2v_file=None, text_col='text', label_col='label'):
@@ -56,10 +70,20 @@ class WordDataset(object):
 
         # Load data from pd.DataFrame into torchtext.data.Dataset
         train_df = self.get_pandas_df(train_file, text_col, label_col)
+
+        int_dict, revert_dict = {}, {}
+        for idx,ii in enumerate(train_df.label.unique()):
+            int_dict[ii] = idx
+            revert_dict[idx] = ii
+
+        train_df['label'] = [int_dict[x] for x in train_df.label]
+
         train_examples = [legacy.data.Example.fromlist(i, datafields) for i in train_df.values.tolist()]
         train_data = legacy.data.Dataset(train_examples, datafields)
 
         test_df = self.get_pandas_df(test_file, text_col, label_col)
+        test_df['label'] = [int_dict[x] for x in test_df.label]
+
         test_examples = [legacy.data.Example.fromlist(i, datafields) for i in test_df.values.tolist()]
         test_data = legacy.data.Dataset(test_examples, datafields)
 

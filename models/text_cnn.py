@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 import numpy as np
+import os
 
 embed_size = 300
 kernel_size = [3, 4, 5]
@@ -27,11 +28,19 @@ class TextCNN(nn.Module):
         super(TextCNN, self).__init__()
 
         # Embedding Layer
-        self.embeddings = nn.Embedding(vocab_size, embed_size)
         self.sequence_len = sequence_len
-        self.embeddings, self.vocabulary = self._init_embeddings_and_vocab(model__embeddings,
+
+        # if word_embeddings is not None:
+        #     self.embeddings.weight = nn.Parameter(word_embeddings, requires_grad=fine_tune)
+
+        embeddings_weight, self.vocabulary = self._init_embeddings_and_vocab(model__embeddings,
                                         model__vocabulary,
                                         model__embeddings_dim)
+
+        self.embeddings = nn.Embedding(len(self.vocabulary), embed_size)
+        self.embeddings.weight = nn.Parameter(torch.Tensor(embeddings_weight), requires_grad=fine_tune)
+
+
 
         # Conv layers
         # self.convs = nn.ModuleList([nn.Conv2d(1, num_channels, [k, embed_size]) for k in kernel_size])
@@ -132,4 +141,104 @@ class TextCNN(nn.Module):
             message = "Embeddings file couldn't load: {}".format(e)
             raise ValueError(message)
         return embeddings
+
+    def _load_word2vec_vocabulary(self, vocab_file: str) -> dict:
+        vocab = {}
+        # Added a check to not wrap the whole "with ... as" block with try/except
+        if not os.path.exists(vocab_file):
+            message = "Vocabulary file doesn't exist"
+            raise FileNotFoundError(message)
+        with open(vocab_file, encoding="utf-8") as vfile:
+            unk_num = 0
+            for line_num, line in enumerate(vfile):
+                line = line.strip()
+                try:
+                    cur_word, cur_num_of_occur = line.split()
+                except ValueError:
+                    cur_word = "unkword_%i" % unk_num
+                    unk_num += 1
+                if cur_word in vocab.keys():
+                    cur_word = "unkword_%i" % unk_num
+                    unk_num += 1
+                vocab[cur_word] = line_num
+        return vocab
+
+
+    def _add_unknown_words_to_model(self, train_data_texts):
+        # logger.info("Adding unknown words to model...")
+        word_list = [w for text in train_data_texts for w in text]
+        word_set = set(word_list)
+        initial_vocab_len = len(self.vocabulary)
+        vocab_set = set(self.vocabulary.keys())
+        new_words_set = set.difference(word_set, vocab_set)
+        number_added_words = len(new_words_set)
+        new_words_vocab = dict(zip(new_words_set, range(initial_vocab_len, initial_vocab_len + number_added_words)))
+        self.vocabulary.update(new_words_vocab)
+        self.embeddings = np.concatenate(
+            (self.embeddings,
+             np.random.uniform(
+                 low=-0.2, high=0.2, size=(number_added_words, self.properties.model__embeddings_dim)
+             )),
+            axis=0
+        )
+
+
+
+    def _digitize_sents(self, texts) -> np.array:
+        if not isinstance(texts, list):
+            message = "texts must be a list"
+            raise TypeError(message)
+        digitized_texts = []
+        unk_word_number = self.vocabulary['<UNK>']
+        pad_token_number = self.vocabulary['<PAD>']
+        for sample in texts:
+            if not sample:
+
+                continue
+            digitized_sample = []
+            for word in sample[-self.properties.model__max_len:]:
+                try:
+                    idx = self.vocabulary[word]
+                except KeyError:
+                    idx = unk_word_number
+                digitized_sample.append(idx)
+            if len(digitized_sample) < self.properties.model__max_len:
+                digitized_sample = [pad_token_number] * (
+                        self.properties.model__max_len - len(digitized_sample)
+                ) + digitized_sample
+            digitized_texts.append(digitized_sample)
+        if not digitized_texts:
+            message = "No texts found after converting words to integers"
+            raise ValueError(message)
+        return np.array(digitized_texts, dtype=np.int32)
+
+
+    def _digitize_labels(self, labels) -> np.array:
+        """
+        :param labels: list of target labels
+        :return: 2d array where rows are one-hot target labels
+        :raises:
+            ValueError: if a label from labels isn't in self.labels
+        """
+        inverse_labels = {l: i for i, l in enumerate(self.labels)}
+
+        if self.properties.model__label_smoothing:
+            alpha = 0.1  # label smoothing factor
+            labels_dig = np.ones((len(labels), len(inverse_labels))) * (alpha / len(self.labels))
+        else:
+            labels_dig = np.zeros((len(labels), len(inverse_labels)), dtype=np.int16)
+
+        for i, label in enumerate(labels):
+            try:
+                if self.properties.model__label_smoothing:
+                    labels_dig[i, inverse_labels[label]] += 1 - alpha
+                else:
+                    labels_dig[i, inverse_labels[label]] += 1
+            except KeyError:
+                message = "Unknown label found while one-hot encoding labels: {}" \
+                    .format(label)
+                raise KeyError(message)
+        return labels_dig
+
+
 
