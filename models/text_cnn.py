@@ -38,7 +38,7 @@ class TextCNN(nn.Module):
                                         model__embeddings_dim)
 
         self.embeddings = nn.Embedding(len(self.vocabulary), embed_size)
-        self.embeddings.weight = nn.Parameter(torch.Tensor(embeddings_weight), requires_grad=fine_tune)
+        self.embeddings.weight = nn.Parameter(torch.FloatTensor(embeddings_weight), requires_grad=fine_tune)
 
 
 
@@ -55,14 +55,14 @@ class TextCNN(nn.Module):
 
 
     def forward(self, x):
-        emb = self.emb_layer(x)
+        emb = self.embeddings(x)
 
         emb = torch.unsqueeze(emb, -1).permute(0, 3, 1, 2)
 
         convs = [F.relu(conv(emb)) for conv in self.convs]
 
-        pools = [F.max_pool2d(input=conv, kernel_size=(self.properties.model__max_len - k + 1, 1)) \
-                 for k, conv in zip(self.properties.model__filter_sizes, convs)]
+        pools = [F.max_pool2d(input=conv, kernel_size=(max_len - k + 1, 1)) \
+                 for k, conv in zip(filter_sizes, convs)]
 
         cat = torch.squeeze(self.dropout(torch.cat(pools, dim=1)))
 
@@ -92,18 +92,25 @@ class TextCNN(nn.Module):
 
     def forward_mix_embed(self, x1, x2, lam):
         # (seq_len, batch) -> (batch, seq_len, embed)
-        x1 = self.embeddings(x1).permute(1, 0, 2)
-        x2 = self.embeddings(x2).permute(1, 0, 2)
-        x = lam * x1 + (1.0-lam) * x2
+        x1 = self.embeddings(x1)
+        x2 = self.embeddings(x2)
+        emb = lam * x1 + (1.0-lam) * x2
         # x = self.mix_embed_nonlinear(x1, x2, lam)
 
-        x = torch.unsqueeze(x, 1)
-        x = [F.relu(conv(x)).squeeze(3) for conv in self.convs]
-        x = [F.max_pool1d(i, i.size(2)).squeeze(2) for i in x]
-        x = torch.cat(x, 1)
-        x = self.dropout(x)
-        x = self.fc(x)
-        return x
+        # emb = self.embeddings(x)
+
+        emb = torch.unsqueeze(emb, -1).permute(0, 3, 1, 2)
+
+        convs = [F.relu(conv(emb)) for conv in self.convs]
+
+        pools = [F.max_pool2d(input=conv, kernel_size=(max_len - k + 1, 1)) \
+                 for k, conv in zip(filter_sizes, convs)]
+
+        cat = torch.squeeze(self.dropout(torch.cat(pools, dim=1)))
+
+        out = self.linear(cat)
+
+        return out
 
     def forward_mix_sent(self, x1, x2, lam):
         y1 = self.forward(x1)

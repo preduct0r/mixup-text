@@ -99,7 +99,7 @@ class Classification:
 
     def get_perm(self, x):
         """get random permutation"""
-        batch_size = x.size()[0]
+        batch_size = x.size()[1]
         if self.use_cuda:
             index = torch.randperm(batch_size).cuda()
         else:
