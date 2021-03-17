@@ -4,20 +4,13 @@ import torch.nn.functional as F
 import numpy as np
 import os
 
-embed_size = 300
-kernel_size = [3, 4, 5]
-num_channels = 100
 
 model__embeddings = '/home/den/Documents/word_embeddings/best_gensim_300_20/gensim_cbow_300d_20mc_30e_12t_0.025a_0.015ma_tf1_lk4_bln.npy'
 model__vocabulary = '/home/den/Documents/word_embeddings/best_gensim_300_20/gensim_cbow_300d_20mc_30e_12t_0.025a_0.015ma_tf1_lk4_bln.dic'
 model__embeddings_dim = 300
 num_filters = 128
 dropout_keep_prob = 0.8
-l2_reg_lambda = 0.01
-learning_rate = 2e-3
-batch_size = 64
-evaluate_every = -1
-max_len = 64
+max_len = 8
 max_epoch_num = 10
 label_smoothing = True
 filter_sizes = [1,1,1,2,2,2]
@@ -37,7 +30,7 @@ class TextCNN(nn.Module):
                                         model__vocabulary,
                                         model__embeddings_dim)
 
-        self.embeddings = nn.Embedding(len(self.vocabulary), embed_size)
+        self.embeddings = nn.Embedding(len(self.vocabulary), model__embeddings_dim)
         self.embeddings.weight = nn.Parameter(torch.FloatTensor(embeddings_weight), requires_grad=fine_tune)
 
 
@@ -51,7 +44,7 @@ class TextCNN(nn.Module):
             torch.nn.init.trunc_normal_(conv.weight, std=0.1)
 
         self.dropout = nn.Dropout(p=dropout_keep_prob)
-        self.fc = nn.Linear(num_channels * len(kernel_size), num_class)
+        self.fc = nn.Linear(num_filters * len(filter_sizes), num_class)
 
 
     def forward(self, x):
@@ -66,7 +59,7 @@ class TextCNN(nn.Module):
 
         cat = torch.squeeze(self.dropout(torch.cat(pools, dim=1)))
 
-        out = self.linear(cat)
+        out = self.fc(cat)
 
         return out
 
@@ -108,7 +101,7 @@ class TextCNN(nn.Module):
 
         cat = torch.squeeze(self.dropout(torch.cat(pools, dim=1)))
 
-        out = self.linear(cat)
+        out = self.fc(cat)
 
         return out
 
